@@ -23,7 +23,7 @@ resource "google_cloud_run_v2_service_iam_policy" "noauth" {
   policy_data = data.google_iam_policy.noauth.policy_data
 }
 
-resource "google_cloud_run_v2_service_iam_policy" "noauth" {
+resource "google_cloud_run_v2_service_iam_policy" "noauth_docker" {
   project = google_cloud_run_v2_service.default.project
   location = google_cloud_run_v2_service.default.location
   name = "backstage-docker"
