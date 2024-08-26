@@ -1,0 +1,107 @@
+name: Deploy Python App
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+
+env:
+  APP_NAME: test-docker
+  GCP_PROJECT_ID: png-gcp-learning-poc
+  DB_NAME: dockerdb
+  COST_CENTER: 
+  IRISK_ID: 
+
+
+jobs:
+  deploy:
+    name: Deploy GCP resources
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    
+    # Checkout IaC code from repository
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure GCP credentials
+      uses: google-github-actions/auth@v1
+      with:
+        workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+  
+    - name: Configure Docker
+      run: gcloud --quiet auth configure-docker
+
+    # Initialize Terraform 
+    - name: Terraform Init
+      run: terraform init
+      working-directory: .  # Where should this command be run?
+      
+    # Format Terraform code
+    - name: Terraform Format
+      run: terraform fmt
+      working-directory: .
+      
+    # Validate Terraform code 
+    - name: Terraform Validate
+      run: terraform validate
+      working-directory: .
+
+    - name: Terraform Plan
+      run: terraform plan -out tf.plan
+      working-directory: .
+
+    - name: Setup OPA
+      uses: open-policy-agent/setup-opa@v2
+      with:
+        version: latest
+
+    - name: Checkout OPA policies
+      uses: actions/checkout@v4
+      with:
+        repository: monkmantra/policy-as-code-iac
+        path: opa
+
+    - name: Evaluate OPA policies
+      shell: bash
+      run: |-
+        terraform show -json tf.plan | jq > tf.json
+        result=$(echo | opa eval -f pretty -d opa/opa.rego -i tf.json "data.policy.denyresource")
+        exitflag=false
+        if [[ $result != "[]" ]]; then
+          result=$(echo $result | awk '{print substr($0, 2, length($0) - 2)}')
+          echo '### OPA Violation' >> $GITHUB_STEP_SUMMARY
+          echo $result | sed "s/,/\n/" >> $GITHUB_STEP_SUMMARY
+          exitflag=true
+        fi
+        result=$(echo | opa eval -f pretty -d opa/opa.rego -i tf.json "data.policy.denyremovaloflabels")
+        if [[ $result != "[]" ]]; then
+          result=$(echo $result | awk '{print substr($0, 2, length($0) - 2)}')
+          if [[ $exitflag != true ]]; then
+            echo '### OPA Violation' >> $GITHUB_STEP_SUMMARY
+          fi
+          echo $result | sed "s/,/\n/" >> $GITHUB_STEP_SUMMARY
+          exitflag=true
+        fi
+        if [[ $exitflag == true ]]; then
+          exit 1
+        fi
+      
+    # Apply Terraform Plan
+    - name: Terraform Apply
+      run: terraform apply tf.plan
+      working-directory: .
+    
+    - name: Insert demo data in Spanner database
+      shell: bash
+      run: |-
+        db_name_lowercase=$(echo "${{ env.DB_NAME }}" | awk '{print tolower($0)}')
+        gcloud spanner databases execute-sql $db_name_lowercase --instance=appdb --sql="INSERT tasks(title, status) VALUES('Create IDP environment','Completed')"
+        gcloud spanner databases execute-sql $db_name_lowercase --instance=appdb --sql="INSERT tasks(title, status) VALUES('Create application templates','Completed')"
+        gcloud spanner databases execute-sql $db_name_lowercase --instance=appdb --sql="INSERT tasks(title, status) VALUES('Create Terraform templates','Completed')"
+        gcloud spanner databases execute-sql $db_name_lowercase --instance=appdb --sql="INSERT tasks(title, status) VALUES('Prepare demo presentation','Completed')"
+        gcloud spanner databases execute-sql $db_name_lowercase --instance=appdb --sql="INSERT tasks(title, status) VALUES('Do the actual demo','In Progress')"
+  

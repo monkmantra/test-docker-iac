@@ -1,0 +1,5 @@
+site_name: "test-docker - IaC"
+site_description: "Infra as Code to provision GCP resources and deploy ***test-docker***'s Docker image"
+
+nav:
+  - Home: index.md
