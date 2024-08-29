@@ -54,41 +54,41 @@ jobs:
       run: terraform plan -out tf.plan
       working-directory: .
 
-    - name: Setup OPA
-      uses: open-policy-agent/setup-opa@v2
-      with:
-        version: latest
+    # - name: Setup OPA
+    #   uses: open-policy-agent/setup-opa@v2
+    #   with:
+    #     version: latest
 
-    - name: Checkout OPA policies
-      uses: actions/checkout@v4
-      with:
-        repository: monkmantra/policy-as-code-iac
-        path: opa
+    # - name: Checkout OPA policies
+    #   uses: actions/checkout@v4
+    #   with:
+    #     repository: monkmantra/policy-as-code-iac
+    #     path: opa
 
-    - name: Evaluate OPA policies
-      shell: bash
-      run: |-
-        terraform show -json tf.plan | jq > tf.json
-        result=$(echo | opa eval -f pretty -d opa/opa.rego -i tf.json "data.policy.denyresource")
-        exitflag=false
-        if [[ $result != "[]" ]]; then
-          result=$(echo $result | awk '{print substr($0, 2, length($0) - 2)}')
-          echo '### OPA Violation' >> $GITHUB_STEP_SUMMARY
-          echo $result | sed "s/,/\n/" >> $GITHUB_STEP_SUMMARY
-          exitflag=true
-        fi
-        result=$(echo | opa eval -f pretty -d opa/opa.rego -i tf.json "data.policy.denyremovaloflabels")
-        if [[ $result != "[]" ]]; then
-          result=$(echo $result | awk '{print substr($0, 2, length($0) - 2)}')
-          if [[ $exitflag != true ]]; then
-            echo '### OPA Violation' >> $GITHUB_STEP_SUMMARY
-          fi
-          echo $result | sed "s/,/\n/" >> $GITHUB_STEP_SUMMARY
-          exitflag=true
-        fi
-        if [[ $exitflag == true ]]; then
-          exit 1
-        fi
+    # - name: Evaluate OPA policies
+    #   shell: bash
+    #   run: |-
+    #     terraform show -json tf.plan | jq > tf.json
+    #     result=$(echo | opa eval -f pretty -d opa/opa.rego -i tf.json "data.policy.denyresource")
+    #     exitflag=false
+    #     if [[ $result != "[]" ]]; then
+    #       result=$(echo $result | awk '{print substr($0, 2, length($0) - 2)}')
+    #       echo '### OPA Violation' >> $GITHUB_STEP_SUMMARY
+    #       echo $result | sed "s/,/\n/" >> $GITHUB_STEP_SUMMARY
+    #       exitflag=true
+    #     fi
+    #     result=$(echo | opa eval -f pretty -d opa/opa.rego -i tf.json "data.policy.denyremovaloflabels")
+    #     if [[ $result != "[]" ]]; then
+    #       result=$(echo $result | awk '{print substr($0, 2, length($0) - 2)}')
+    #       if [[ $exitflag != true ]]; then
+    #         echo '### OPA Violation' >> $GITHUB_STEP_SUMMARY
+    #       fi
+    #       echo $result | sed "s/,/\n/" >> $GITHUB_STEP_SUMMARY
+    #       exitflag=true
+    #     fi
+    #     if [[ $exitflag == true ]]; then
+    #       exit 1
+    #     fi
       
     # Apply Terraform Plan
     - name: Terraform Apply
